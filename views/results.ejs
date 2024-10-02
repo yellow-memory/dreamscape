@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Domain Availability Results</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f4f4f4;
+      }
+      .widget {
+        text-align: left;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: transparent;
+      }
+      .input-group {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+      .prefix {
+        font-size: 18px;
+        padding: 21px;
+        background: #eee;
+      }
+      input {
+        padding: 22px;
+        border: 1px solid #ccc;
+        flex-grow: 1;
+      }
+      button {
+        padding: 22px 25px;
+        background-color: #003b44;
+        color: white;
+        border: none;
+        border-radius: 0px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      /* General container styling */
+      .results-container,
+      .form-container {
+        max-width: 100%;
+        margin: 15px auto;
+        border: 1px solid grey;
+        padding: 20px;
+        border-radius: 8px;
+        background-color: white;
+      }
+      .domain-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #ccc;
+        transition: background-color 0.3s;
+      }
+      .domain-row.selected {
+        background-color: #fffee4;
+      }
+      .domain-row:last-child {
+        border-bottom: none;
+      }
+      .status {
+        font-weight: bold;
+      }
+      .available {
+        color: lightblue;
+        font-size: 12px;
+      }
+      .taken {
+        color: #ff4d4d;
+        font-size: 12px;
+      }
+      .price {
+        color: #007bff;
+      }
+      .buy-button {
+        padding: 10px 20px;
+        background-color: transparent;
+        color: black;
+        border: 1px solid grey;
+        border-radius: 0px;
+        cursor: pointer;
+      }
+      .buy-button:hover {
+        background-color: #0056b3;
+      }
+      .form-group {
+        margin-bottom: 10px;
+      }
+      .form-group label {
+        display: block;
+        font-size: 14px;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      .form-group .form-info {
+        font-size: 16px;
+        margin-bottom: 10px;
+        font-weight: bold;
+      }
+      .stripe-input {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        width: calc(100% - 22px); /* Adjusting for padding */
+      }
+      /* Align the text and checkboxes to the left and add separators */
+      .hosting-package {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 10px 0;
+        border-bottom: 1px solid lightgrey; /* Grey line for separation */
+      }
+      .hosting-package input {
+        margin-right: 10px;
+      }
+      .hosting-package label {
+        margin-left: 10px;
+        flex-grow: 1;
+        text-align: left;
+      }
+      .hidden {
+        display: none;
+      }
+      /* Add a thin light grey line for total and separation */
+      .thin-line {
+        border-top: 1px solid lightgrey;
+        margin: 10px 0;
+      }
+      .total-payment {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+    </style>
+    <script src="https://js.stripe.com/v3/"></script>
+  </head>
+  <body>
+    <div class="widget">
+      <h1>Find a perfect domain!</h1>
+      <div class="input-group">
+        <span class="prefix">www.</span>
+        <input type="text" id="domainInput" placeholder="Enter domain name" />
+        <button id="checkButton">Explore</button>
+      </div>
+    </div>
+
+    <!-- Search Results -->
+    <div class="results-container" id="resultsContainer">
+      <h2>Search Results</h2>
+      <% data.forEach(domain => { %>
+      <div
+        class="domain-row"
+        id="domainRow-<%= domain.domain_name %>"
+        onclick="highlightRow('<%= domain.domain_name %>', <%= domain.register_price %>)"
+      >
+        <div>www.<%= domain.domain_name %></div>
+        <div class="status">
+          <% if (domain.is_available) { %>
+          <div class="available">Available</div>
+          <div class="price">£<%= domain.register_price %> / Per Year</div>
+          <% } else { %>
+          <div class="taken">Taken</div>
+          <div class="price"></div>
+          <% } %>
+        </div>
+        <button
+          class="buy-button"
+          onclick="showHostingPackageForm('<%= domain.domain_name %>', <%= domain.register_price %>)"
+          style="display: <%= domain.is_available ? 'block' : 'none' %>;"
+        >
+          Register
+        </button>
+      </div>
+      <% }) %>
+    </div>
+
+    <!-- Email Hosting Options -->
+    <div class="results-container hidden" id="emailHostingContainer">
+      <h2>Select an Email Hosting Package</h2>
+      <div class="hosting-package">
+        <input
+          type="checkbox"
+          id="basicPackage"
+          onclick="selectPackage('Basic', 19.20)"
+        />
+        <label for="basicPackage"
+          >Basic (£19.20 per year) - 1 Email account, 2GB space, 25Mb
+          attachment</label
+        >
+      </div>
+      <div class="hosting-package">
+        <input
+          type="checkbox"
+          id="standardPackage"
+          onclick="selectPackage('Standard', 43.20)"
+        />
+        <label for="standardPackage"
+          >Standard (£43.20 per year) - 10 Email accounts, 2GB each, 25Mb
+          attachment</label
+        >
+      </div>
+      <div class="hosting-package">
+        <input
+          type="checkbox"
+          id="businessPackage"
+          onclick="selectPackage('Business', 69.99)"
+        />
+        <label for="businessPackage"
+          >Business (£69.99 per year) - Unlimited Email accounts, 2GB space,
+          25Mb attachment</label
+        >
+      </div>
+      <button onclick="showRegistrantForm()">Continue</button>
+      <button onclick="skipHostingPackage()">Skip</button>
+    </div>
+
+    <!-- Registrant Form -->
+    <div id="registrantForm" class="form-container hidden">
+      <h2>Registrant Information</h2>
+      <div class="form-group">
+        <label for="firstName">First Name</label>
+        <input type="text" id="firstName" required />
+      </div>
+      <div class="form-group">
+        <label for="lastName">Last Name</label>
+        <input type="text" id="lastName" required />
+      </div>
+      <div class="form-group">
+        <label for="address">Address</label>
+        <input type="text" id="address" required />
+      </div>
+      <div class="form-group">
+        <label for="city">City</label>
+        <input type="text" id="city" required />
+      </div>
+      <div class="form-group">
+        <label for="state">State</label>
+        <input type="text" id="state" required />
+      </div>
+      <div class="form-group">
+        <label for="postCode">Post Code</label>
+        <input type="text" id="postCode" required />
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" required />
+      </div>
+      <button onclick="submitRegistrantForm()">Continue</button>
+    </div>
+
+    <!-- Payment Form -->
+    <div id="paymentForm" class="form-container hidden">
+      <h2>Payment Information</h2>
+      <div class="form-info" id="selectedDomainInfo"></div>
+      <div class="form-info" id="selectedEmailPackageInfo"></div>
+      <div class="thin-line"></div>
+      <!-- Grey line -->
+      <div class="total-payment" id="totalPaymentInfo"></div>
+      <div class="thin-line"></div>
+      <!-- Grey line -->
+
+      <form id="stripePaymentForm">
+        <div class="form-group">
+          <label for="cardHolderName">Card Holder Name</label>
+          <input
+            type="text"
+            id="cardHolderName"
+            class="stripe-input"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="card-element">Card Information</label>
+          <div id="card-element" class="stripe-input"></div>
+        </div>
+        <button type="submit">Pay & Register Domain</button>
+        <div id="card-errors" role="alert"></div>
+      </form>
+    </div>
+
+    <script>
+      const stripe = Stripe(
+        "pk_test_51IZk6CLWcouNeT9dn9WZIcKUsdj5Pgmg2w1GOuQxfHwrI0s4VEGIjnl0fUiSKoV3S95IVPxvxCD7wt27rfxSIy3200RPorXY4R"
+      );
+      const elements = stripe.elements();
+      const cardElement = elements.create("card");
+      cardElement.mount("#card-element");
+
+      let currentDomain = "";
+      let currentPrice = 0;
+      let selectedEmailPackage = "";
+      let selectedEmailPackagePrice = 0;
+
+      // Handle domain search
+      document
+        .getElementById("checkButton")
+        .addEventListener("click", async () => {
+          const domain = document.getElementById("domainInput").value;
+          const resultsContainer = document.getElementById("resultsContainer");
+
+          // Clear previous results
+          resultsContainer.innerHTML = "<h2>Search Results</h2>";
+
+          try {
+            const response = await fetch(
+              `/domain-availability?domain=${domain}`
+            );
+            const data = await response.json();
+
+            if (data.data.length === 0) {
+              resultsContainer.innerHTML +=
+                "<p>No domains available or invalid domain name.</p>";
+              return;
+            }
+
+            data.data.forEach((domain) => {
+              const domainRow = document.createElement("div");
+              domainRow.classList.add("domain-row");
+              domainRow.id = `domainRow-${domain.domain_name}`;
+
+              const domainNameDiv = document.createElement("div");
+              domainNameDiv.innerHTML = `www.${domain.domain_name}`;
+              domainRow.appendChild(domainNameDiv);
+
+              const statusDiv = document.createElement("div");
+              statusDiv.classList.add("status");
+
+              if (domain.is_available) {
+                statusDiv.innerHTML = `
+                            <div class="available">Available</div>
+                            <div class="price">£${domain.register_price} / Per Year</div>
+                        `;
+                const buyButton = document.createElement("button");
+                buyButton.classList.add("buy-button");
+                buyButton.innerHTML = "Register";
+                buyButton.onclick = () =>
+                  highlightRow(domain.domain_name, domain.register_price);
+                domainRow.appendChild(buyButton);
+              } else {
+                statusDiv.innerHTML = `<div class="taken">Taken</div>`;
+              }
+
+              domainRow.appendChild(statusDiv);
+              resultsContainer.appendChild(domainRow);
+            });
+          } catch (error) {
+            console.error("Error fetching domain availability:", error);
+          }
+        });
+
+      function highlightRow(domainName, price) {
+        document
+          .querySelectorAll(".domain-row")
+          .forEach((row) => row.classList.remove("selected"));
+        document
+          .getElementById(`domainRow-${domainName}`)
+          .classList.add("selected");
+        showHostingPackageForm(domainName, price);
+      }
+
+      function showHostingPackageForm(domainName, price) {
+        console.log("============> showHostingPackageForm ", price);
+        currentDomain = domainName;
+        currentPrice = price;
+        document
+          .getElementById("emailHostingContainer")
+          .classList.remove("hidden");
+      }
+
+      function selectPackage(packageName, packagePrice) {
+        document
+          .querySelectorAll("input[type='checkbox']")
+          .forEach((checkbox) => (checkbox.checked = false));
+        event.target.checked = true;
+        selectedEmailPackage = packageName;
+        selectedEmailPackagePrice = packagePrice;
+      }
+
+      function showRegistrantForm() {
+        document
+          .getElementById("emailHostingContainer")
+          .classList.add("hidden");
+        document.getElementById("registrantForm").classList.remove("hidden");
+      }
+
+      function skipHostingPackage() {
+        selectedEmailPackage = "No package";
+        selectedEmailPackagePrice = 0;
+        showRegistrantForm();
+      }
+
+      function submitRegistrantForm() {
+        const registrantData = {
+          first_name: document.getElementById("firstName").value,
+          last_name: document.getElementById("lastName").value,
+          address: document.getElementById("address").value,
+          city: document.getElementById("city").value,
+          state: document.getElementById("state").value,
+          post_code: document.getElementById("postCode").value,
+          email: document.getElementById("email").value,
+        };
+
+        window.registrantData = registrantData;
+        document.getElementById(
+          "selectedDomainInfo"
+        ).innerText = `Domain: www.${currentDomain} - £${currentPrice}/per year`;
+        document.getElementById(
+          "selectedEmailPackageInfo"
+        ).innerText = `Email Hosting: ${selectedEmailPackage} - £${selectedEmailPackagePrice}/per year`;
+
+        const totalPayment = currentPrice + selectedEmailPackagePrice;
+        document.getElementById(
+          "totalPaymentInfo"
+        ).innerText = `Total Payment: £${totalPayment}/per year`;
+
+        document.getElementById("registrantForm").classList.add("hidden");
+        document.getElementById("paymentForm").classList.remove("hidden");
+      }
+
+      // Payment form submission with Stripe
+      document
+        .getElementById("stripePaymentForm")
+        .addEventListener("submit", async (event) => {
+          event.preventDefault();
+
+          const { paymentMethod, error } = await stripe.createPaymentMethod({
+            type: "card",
+            card: cardElement,
+            billing_details: {
+              name: document.getElementById("cardHolderName").value,
+            },
+          });
+
+          if (error) {
+            console.log("========= Ahhhhhhhh result.ejs error: " + error);
+            document.getElementById("card-errors").innerText = error.message;
+          } else {
+            const totalPrice = (currentPrice + selectedEmailPackagePrice) * 100; // Convert to pence
+
+            const response = await fetch(
+              `/create-payment-intent?amount=${totalPrice}`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  paymentMethodId: paymentMethod.id,
+                  domain: currentDomain,
+                  registrant: window.registrantData,
+                  emailPackagePrice: selectedEmailPackagePrice,
+                }),
+              }
+            );
+
+            const data = await response.json();
+            if (data.error) {
+              document.getElementById("card-errors").innerText = data.error;
+            } else {
+              await registerDomainWithDreamscape(
+                window.registrantData,
+                currentDomain
+              );
+              alert("Payment successful! Domain and email hosting registered.");
+            }
+          }
+        });
+
+      async function registerDomainWithDreamscape(registrantData, domainName) {
+        const response = await fetch("/register-domain", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...registrantData,
+            domain_name: domainName,
+          }),
+        });
+
+        const result = await response.json();
+        if (result.status) {
+          console.log("Domain successfully registered:", result.data);
+        } else {
+          console.error("Error registering domain:", result.error_message);
+        }
+      }
+    </script>
+  </body>
+</html>
