@@ -4,6 +4,11 @@ import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import Stripe from "stripe";
+import dotenv from "dotenv";
+
+import constants from "./config/constants.js";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,10 +26,9 @@ app.use(express.static("public"));
 // Parse JSON bodies
 app.use(express.json());
 
-const apiKey = "a86ee953175fb654f83bc1e1fb91cdd6"; // Your API key
-const resellerId = "28076"; // Your Reseller ID
-const stripeSecretKey =
-  "sk_test_51IZk6CLWcouNeT9dL7L1GbbW6GbgUJg1Z6ChLOT3j5uSgl5vK8k7rrB0oQXGiB1s5GEcnemlPIRgYVgJCl7AEuPZ00xvvidDnH";
+const apiKey = process.env.API_KEY;
+const resellerId = process.env.RESELLER_ID;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = new Stripe(stripeSecretKey);
 
 const domainTypes = ["co.uk", "online", "com", "org", "org.uk"];
@@ -56,7 +60,8 @@ app.get("/domain-availability", async (req, res) => {
     const requestId = generateRequestID();
     const signature = generateSignature(requestId, apiKey);
 
-    let url = "https://reseller-api.ds.network/domains/availability?";
+    let url = constants.urls.domainAvailability + "?";
+
     const domainQueries = domainTypes.map(
       (type) => `domain_names[]=${domainName}.${type}`
     );
@@ -76,7 +81,7 @@ app.get("/domain-availability", async (req, res) => {
     });
 
     const data = await response.json();
-    console.log("============> Dreamscape API Response:", data); // Log API response for debugging
+    // console.log("============> Dreamscape API Response:", data); // Log API response for debugging
 
     if (data && Array.isArray(data.data)) {
       res.render("results", { data: data.data });
@@ -94,8 +99,11 @@ app.post("/create-payment-intent", async (req, res) => {
   const { amount } = req.query;
   const { paymentMethodId, domain, registrant, emailPackagePrice } = req.body;
 
+  if (!amount || !paymentMethodId || !domain || !registrant) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
   try {
-    // const totalAmount = parseInt(amount) + parseInt(emailPackagePrice) * 100;
     const totalAmount = parseInt(amount);
 
     const paymentIntent = await stripe.paymentIntents.create({
@@ -103,17 +111,22 @@ app.post("/create-payment-intent", async (req, res) => {
       currency: "gbp",
       payment_method: paymentMethodId,
       confirm: true,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never",
+      },
     });
 
     if (paymentIntent.status === "succeeded") {
+      console.log("============> payment successful");
       await registerDomain(domain, registrant);
       res.json({ message: "Payment successful! Domain registered." });
     } else {
+      console.log("============> payment error");
       res.status(400).json({ error: "Payment failed." });
     }
   } catch (error) {
     console.error("Payment error:", error);
-    console.log("========= Ahhhhhhhh server.js error: " + error);
     res.status(500).json({ error: "Payment processing failed." });
   }
 });
@@ -122,10 +135,39 @@ async function registerDomain(domain, registrantData) {
   const requestId = generateRequestID();
   const signature = generateSignature(requestId, apiKey);
 
+  console.log(
+    "========== Registering domain ",
+    domain,
+    " : with registrant ",
+    registrantData
+  );
+
+  const registrantUrl = constants.urls.domainResistrant;
+
   try {
-    const registrantResponse = await fetch(
-      "https://reseller-api.ds.network/domains/registrants",
-      {
+    const registrantResponse = await fetch(registrantUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+        "Api-Request-Id": requestId,
+        "Api-Signature": signature,
+        "Reseller-ID": resellerId,
+      },
+      body: JSON.stringify(registrantData),
+    });
+
+    const registrantResult = await registrantResponse.json();
+
+    console.log(
+      "============> registrantResult API Response:",
+      registrantResult
+    ); // Log API response for debugging
+
+    if (registrantResult.status) {
+      const registerUrl = constants.urls.domainRegister;
+      l;
+      const domainResponse = await fetch(registerUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -134,31 +176,16 @@ async function registerDomain(domain, registrantData) {
           "Api-Signature": signature,
           "Reseller-ID": resellerId,
         },
-        body: JSON.stringify(registrantData),
-      }
-    );
-
-    const registrantResult = await registrantResponse.json();
-    if (registrantResult.status) {
-      const domainResponse = await fetch(
-        "https://reseller-api.ds.network/domains/register",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            accept: "application/json",
-            "Api-Request-Id": requestId,
-            "Api-Signature": signature,
-            "Reseller-ID": resellerId,
-          },
-          body: JSON.stringify({
-            domain_name: domain,
-            registrant_id: registrantResult.data.id,
-          }),
-        }
-      );
+        body: JSON.stringify({
+          domain_name: domain,
+          registrant_id: registrantResult.data.id,
+        }),
+      });
 
       const domainData = await domainResponse.json();
+
+      console.log("============> domainData API Response:", domainData); // Log API response for debugging
+
       if (!domainData.status) throw new Error(domainData.error_message);
     } else {
       throw new Error(registrantResult.error_message);

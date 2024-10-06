@@ -167,7 +167,6 @@
       <div
         class="domain-row"
         id="domainRow-<%= domain.domain_name %>"
-        onclick="highlightRow('<%= domain.domain_name %>', <%= domain.register_price %>)"
       >
         <div>www.<%= domain.domain_name %></div>
         <div class="status">
@@ -231,7 +230,11 @@
     </div>
 
     <!-- Registrant Form -->
-    <div id="registrantForm" class="form-container hidden">
+    <form
+      id="registrantForm"
+      class="form-container hidden"
+      onsubmit="event.preventDefault();"
+    >
       <h2>Registrant Information</h2>
       <div class="form-group">
         <label for="firstName">First Name</label>
@@ -253,6 +256,18 @@
         <label for="state">State</label>
         <input type="text" id="state" required />
       </div>
+      <div class="form-group"></div>
+        <label for="country">Country</label>
+        <input type="text" id="country" required />
+      </div>
+      <div class="form-group">
+        <label for="countryCode">Country Code</label>
+        <input type="text" id="countryCode" required />
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input type="text" id="phone" required />
+      </div>
       <div class="form-group">
         <label for="postCode">Post Code</label>
         <input type="text" id="postCode" required />
@@ -262,7 +277,7 @@
         <input type="email" id="email" required />
       </div>
       <button onclick="submitRegistrantForm()">Continue</button>
-    </div>
+    </form>
 
     <!-- Payment Form -->
     <div id="paymentForm" class="form-container hidden">
@@ -374,7 +389,7 @@
         showHostingPackageForm(domainName, price);
       }
 
-      function showHostingPackageForm(domainName, price) {
+       async function showHostingPackageForm(domainName, price) {
         console.log("============> showHostingPackageForm ", price);
         currentDomain = domainName;
         currentPrice = price;
@@ -405,6 +420,23 @@
         showRegistrantForm();
       }
 
+      function validate(data) {
+        let isValid = true;
+
+        if (!data.first_name) return !isValid;
+        if (!data.last_name) return !isValid;
+        if (!data.address) return !isValid;
+        if (!data.city) return !isValid;
+        if (!data.state) return !isValid;
+        if (!data.post_code) return !isValid;
+        if (!data.email) return !isValid;
+        if (!data.country) return !isValid;
+        if (!data.country_code) return !isValid;
+        if (!data.phone) return !isValid;
+
+        return isValid;
+      }
+
       function submitRegistrantForm() {
         const registrantData = {
           first_name: document.getElementById("firstName").value,
@@ -414,23 +446,29 @@
           state: document.getElementById("state").value,
           post_code: document.getElementById("postCode").value,
           email: document.getElementById("email").value,
+          country: document.getElementById("country").value,
+          country_code: document.getElementById("countryCode").value,
+          phone: document.getElementById("phone").value,
+          account_type: 'personal'
         };
 
-        window.registrantData = registrantData;
-        document.getElementById(
-          "selectedDomainInfo"
-        ).innerText = `Domain: www.${currentDomain} - £${currentPrice}/per year`;
-        document.getElementById(
-          "selectedEmailPackageInfo"
-        ).innerText = `Email Hosting: ${selectedEmailPackage} - £${selectedEmailPackagePrice}/per year`;
+        if (validate(registrantData)) {
+          window.registrantData = registrantData;
+          document.getElementById(
+            "selectedDomainInfo"
+          ).innerText = `Domain: www.${currentDomain} - £${currentPrice}/per year`;
+          document.getElementById(
+            "selectedEmailPackageInfo"
+          ).innerText = `Email Hosting: ${selectedEmailPackage} - £${selectedEmailPackagePrice}/per year`;
 
-        const totalPayment = currentPrice + selectedEmailPackagePrice;
-        document.getElementById(
-          "totalPaymentInfo"
-        ).innerText = `Total Payment: £${totalPayment}/per year`;
+          const totalPayment = currentPrice + selectedEmailPackagePrice;
+          document.getElementById(
+            "totalPaymentInfo"
+          ).innerText = `Total Payment: £${totalPayment}/per year`;
 
-        document.getElementById("registrantForm").classList.add("hidden");
-        document.getElementById("paymentForm").classList.remove("hidden");
+          document.getElementById("registrantForm").classList.add("hidden");
+          document.getElementById("paymentForm").classList.remove("hidden");
+        }
       }
 
       // Payment form submission with Stripe
