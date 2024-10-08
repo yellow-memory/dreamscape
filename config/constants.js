@@ -5,6 +5,8 @@ const constants = {
     getDomainList: "https://reseller-api.ds.network/domains",
     domainRegister: "https://reseller-api.ds.network/domains",
     customerRegister: "https://reseller-api.ds.network/customers",
+    emailPackageRegister:
+      "https://reseller-api.ds.network/products/email-hostings",
   },
 };
 

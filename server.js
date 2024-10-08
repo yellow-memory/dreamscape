@@ -20,6 +20,10 @@ const port = 3000;
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+app.get("/", (req, res) => {
+  res.render("results");
+});
+
 // Serve static files from 'public'
 app.use(express.static("public"));
 
@@ -84,9 +88,9 @@ app.get("/domain-availability", async (req, res) => {
     // console.log("============> Dreamscape API Response:", data); // Log API response for debugging
 
     if (data && Array.isArray(data.data)) {
-      res.render("results", { data: data.data });
+      res.status(200).json({ data: data.data });
     } else {
-      res.render("results", { data: [] }); // Empty array if no data
+      res.status(200).json({ data: [] }); // Empty array if no data
     }
   } catch (error) {
     console.error("=============> Error fetching domain availability:", error);
@@ -97,7 +101,13 @@ app.get("/domain-availability", async (req, res) => {
 // Payment endpoint (as per your setup)
 app.post("/create-payment-intent", async (req, res) => {
   const { amount } = req.query;
-  const { paymentMethodId, domain, registrant, emailPackagePrice } = req.body;
+  const {
+    paymentMethodId,
+    domain,
+    registrant,
+    emailPackagePrice,
+    selectedEmailPackage,
+  } = req.body;
 
   console.log("=================> create payment intent ");
 
@@ -121,8 +131,14 @@ app.post("/create-payment-intent", async (req, res) => {
 
     if (paymentIntent.status === "succeeded") {
       console.log("============> payment successful");
-      await registerDomain(domain, registrant);
-      res.json({ message: "Payment successful! Domain registered." });
+
+      if (selectedEmailPackage) {
+        await registerEmailPackage(domain, selectedEmailPackage, registrant);
+      }
+
+      // const response = await registerDomain(domain, registrant);
+
+      // res.json(response);
     } else {
       console.log("============> payment error");
       res.status(400).json({ error: "Payment failed." });
@@ -133,7 +149,94 @@ app.post("/create-payment-intent", async (req, res) => {
   }
 });
 
-async function getCustomerId(registrantData) {
+app.post("/registrant", async (req, res) => {
+  const data = req.body;
+
+  console.log("=================> registrant data: ", data);
+
+  try {
+    const customerId = await registerCustomer(data);
+
+    try {
+      const registrantResult = await createRegistration(data);
+
+      if (registrantResult.status) {
+        res.status(200).json({ status: true, customer: customerId });
+      }
+    } catch (error) {
+      console.error("Error registering registrant:", error);
+      res.status(500).json({ error: "Failed to register registrant." });
+    }
+  } catch (error) {
+    console.error("Error registering customer:", error);
+    res.status(500).json({ error: "Failed to register customer." });
+  }
+});
+
+async function registerEmailPackage(
+  domain,
+  selectedEmailPackage,
+  registrantData
+) {
+  const requestId = generateRequestID();
+  const signature = generateSignature(requestId, apiKey);
+
+  const emailPackageUrl = constants.urls.emailPackageRegister;
+
+  let plan_id = "";
+
+  switch (selectedEmailPackage) {
+    case "basic":
+      plan_id = 47;
+      break;
+    case "standard":
+      plan_id = 48;
+      break;
+    case "business":
+      plan_id = 49;
+      break;
+    default:
+      plan_id = "";
+  }
+
+  try {
+    const customerId = await registerCustomer(registrantData);
+
+    console.log("=================> email package request:", plan_id); // Log request for debugging
+
+    const emailPackageResponse = await fetch(emailPackageUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+        "Api-Request-Id": requestId,
+        "Api-Signature": signature,
+        "Reseller-ID": resellerId,
+      },
+      body: JSON.stringify({
+        domain,
+        plan_id: plan_id,
+        customer_id: customerId,
+        period: 12,
+      }),
+    });
+
+    const emailPackageResult = await emailPackageResponse.json();
+    if (emailPackageResult.status) {
+      console.log(
+        "============> Email package registered successfully ",
+        emailPackageResult
+      );
+    } else {
+      throw new Error(emailPackageResult.error_message);
+    }
+  } catch (error) {
+    console.error("Error registering email package:", error);
+    throw new Error("Failed to register email package");
+  }
+}
+
+async function registerCustomer(registrantData) {
   const requestId = generateRequestID();
   const signature = generateSignature(requestId, apiKey);
 
@@ -168,16 +271,9 @@ async function getCustomerId(registrantData) {
   }
 }
 
-async function registerDomain(domain, registrantData) {
+async function createRegistration(registrantData) {
   const requestId = generateRequestID();
   const signature = generateSignature(requestId, apiKey);
-
-  console.log(
-    "========== Registering domain ",
-    domain,
-    " : with registrant ",
-    registrantData
-  );
 
   const registrantUrl = constants.urls.domainResistrant;
 
@@ -196,46 +292,64 @@ async function registerDomain(domain, registrantData) {
 
     const registrantResult = await registrantResponse.json();
 
-    const customerId = await getCustomerId(registrantData);
-
     console.log(
       "============> registrantResult API Response:",
       registrantResult
     ); // Log API response for debugging
 
-    if (registrantResult.status) {
-      const newrequestId = generateRequestID();
-      const newsignature = generateSignature(newrequestId, apiKey);
-
-      const registerUrl = constants.urls.domainRegister;
-      const domainResponse = await fetch(registerUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          accept: "application/json",
-          "Api-Request-Id": newrequestId,
-          "Api-Signature": newsignature,
-          "Reseller-ID": resellerId,
-        },
-        body: JSON.stringify({
-          domain_name: domain,
-          registrant_id: registrantResult.data.id,
-          period: 12,
-          customer_id: customerId,
-        }),
-      });
-
-      const domainData = await domainResponse.json();
-
-      console.log("============> domainData API Response:", domainData); // Log API response for debugging
-
-      res.json(domainData);
-    } else {
-      throw new Error(registrantResult.error_message);
-    }
+    return { status: registrantResult.status, data: registrantResult.data };
   } catch (error) {
-    console.error("Registration error:", error);
-    throw new Error("Registration failed.");
+    return { status: false, error_message: "Failed to register domain" };
+  }
+}
+
+async function registerDomain(domain, registrantData) {
+  console.log(
+    "========== Registering domain ",
+    domain,
+    " : with registrant ",
+    registrantData
+  );
+
+  const customerId = await registerCustomer(registrantData);
+  const registrantResult = await createRegistration(registrantData);
+
+  if (registrantResult.status) {
+    const requestId = generateRequestID();
+    const signature = generateSignature(requestId, apiKey);
+
+    const registerUrl = constants.urls.domainRegister;
+    const domainResponse = await fetch(registerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+        "Api-Request-Id": requestId,
+        "Api-Signature": signature,
+        "Reseller-ID": resellerId,
+      },
+      body: JSON.stringify({
+        domain_name: domain,
+        registrant_id: registrantResult.data.id,
+        period: 12,
+        customer_id: customerId,
+      }),
+    });
+
+    const domainData = await domainResponse.json();
+
+    console.log("============> domainData API Response:", domainData); // Log API response for debugging
+
+    if (!domainData.status) {
+      return { status: false, error_message: domainData.error_message };
+    } else {
+      return {
+        status: true,
+        domain: domain,
+      };
+    }
+  } else {
+    return { status: false, error_message: registrantResult.error_message };
   }
 }
 
