@@ -164,10 +164,7 @@
     <div class="results-container" id="resultsContainer">
       <h2>Search Results</h2>
       <% data.forEach(domain => { %>
-      <div
-        class="domain-row"
-        id="domainRow-<%= domain.domain_name %>"
-      >
+      <div class="domain-row" id="domainRow-<%= domain.domain_name %>">
         <div>www.<%= domain.domain_name %></div>
         <div class="status">
           <% if (domain.is_available) { %>
@@ -256,7 +253,7 @@
         <label for="state">State</label>
         <input type="text" id="state" required />
       </div>
-      <div class="form-group"></div>
+      <div class="form-group">
         <label for="country">Country</label>
         <input type="text" id="country" required />
       </div>
@@ -389,7 +386,8 @@
         showHostingPackageForm(domainName, price);
       }
 
-       async function showHostingPackageForm(domainName, price) {
+      async function showHostingPackageForm(domainName, price) {
+        console.log("============> showHostingPackageForm ", domainName);
         console.log("============> showHostingPackageForm ", price);
         currentDomain = domainName;
         currentPrice = price;
@@ -447,9 +445,12 @@
           post_code: document.getElementById("postCode").value,
           email: document.getElementById("email").value,
           country: document.getElementById("country").value,
-          country_code: document.getElementById("countryCode").value,
+          country_code: parseInt(document.getElementById("countryCode").value),
           phone: document.getElementById("phone").value,
-          account_type: 'personal'
+          account_type: "business",
+          business_name: "John & Doe Corp",
+          business_number_type: "ABN",
+          business_number: "12345678",
         };
 
         if (validate(registrantData)) {
@@ -489,6 +490,7 @@
             console.log("========= Ahhhhhhhh result.ejs error: " + error);
             document.getElementById("card-errors").innerText = error.message;
           } else {
+            console.log("======== stripe success: " + paymentMethod.id);
             const totalPrice = (currentPrice + selectedEmailPackagePrice) * 100; // Convert to pence
 
             const response = await fetch(
@@ -533,6 +535,7 @@
         });
 
         const result = await response.json();
+
         if (result.status) {
           console.log("Domain successfully registered:", result.data);
         } else {

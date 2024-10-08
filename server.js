@@ -99,6 +99,8 @@ app.post("/create-payment-intent", async (req, res) => {
   const { amount } = req.query;
   const { paymentMethodId, domain, registrant, emailPackagePrice } = req.body;
 
+  console.log("=================> create payment intent ");
+
   if (!amount || !paymentMethodId || !domain || !registrant) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -131,6 +133,41 @@ app.post("/create-payment-intent", async (req, res) => {
   }
 });
 
+async function getCustomerId(registrantData) {
+  const requestId = generateRequestID();
+  const signature = generateSignature(requestId, apiKey);
+
+  const customerUrl = constants.urls.customerRegister;
+
+  try {
+    const customerResponse = await fetch(customerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+        "Api-Request-Id": requestId,
+        "Api-Signature": signature,
+        "Reseller-ID": resellerId,
+      },
+      body: JSON.stringify(registrantData),
+    });
+
+    const customerResult = await customerResponse.json();
+    if (customerResult.status) {
+      console.log(
+        "============> Customer registered successfully ",
+        customerResult
+      );
+      return customerResult.data.id;
+    } else {
+      throw new Error(customerResult.error_message);
+    }
+  } catch (error) {
+    console.error("Error registering customer:", error);
+    throw new Error("Failed to register customer");
+  }
+}
+
 async function registerDomain(domain, registrantData) {
   const requestId = generateRequestID();
   const signature = generateSignature(requestId, apiKey);
@@ -159,26 +196,32 @@ async function registerDomain(domain, registrantData) {
 
     const registrantResult = await registrantResponse.json();
 
+    const customerId = await getCustomerId(registrantData);
+
     console.log(
       "============> registrantResult API Response:",
       registrantResult
     ); // Log API response for debugging
 
     if (registrantResult.status) {
+      const newrequestId = generateRequestID();
+      const newsignature = generateSignature(newrequestId, apiKey);
+
       const registerUrl = constants.urls.domainRegister;
-      l;
       const domainResponse = await fetch(registerUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           accept: "application/json",
-          "Api-Request-Id": requestId,
-          "Api-Signature": signature,
+          "Api-Request-Id": newrequestId,
+          "Api-Signature": newsignature,
           "Reseller-ID": resellerId,
         },
         body: JSON.stringify({
           domain_name: domain,
           registrant_id: registrantResult.data.id,
+          period: 12,
+          customer_id: customerId,
         }),
       });
 
@@ -186,7 +229,7 @@ async function registerDomain(domain, registrantData) {
 
       console.log("============> domainData API Response:", domainData); // Log API response for debugging
 
-      if (!domainData.status) throw new Error(domainData.error_message);
+      res.json(domainData);
     } else {
       throw new Error(registrantResult.error_message);
     }
