@@ -775,7 +775,10 @@
                 showSuccessNotification();
               } else {
                 hideLoader();
-                alert("Domain registration failed!");
+                alert(
+                  "Domain registration failed! " +
+                    response_data.domainData.error_message
+                );
 
                 showContainer("confirmationContainer");
               }
