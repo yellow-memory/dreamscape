@@ -35,7 +35,7 @@ const resellerId = process.env.RESELLER_ID;
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = new Stripe(stripeSecretKey);
 
-const domainTypes = ["co.uk", "online", "com", "org", "org.uk"];
+const domainTypes = ["co.uk", "com", "org", "org.uk", "uk"];
 
 function generateRequestID() {
   return crypto
@@ -100,26 +100,20 @@ app.get("/domain-availability", async (req, res) => {
 
 // Payment endpoint (as per your setup)
 app.post("/create-payment-intent", async (req, res) => {
-  const { amount } = req.query;
-  const {
-    paymentMethodId,
-    domain,
-    registrant,
-    emailPackagePrice,
-    selectedEmailPackage,
-  } = req.body;
+  // const { amount } = req.query;
+  const { paymentMethodId, domain, customer_id, price } = req.body;
 
-  console.log("=================> create payment intent ");
+  console.log("=================> create payment intent ", req.body);
 
-  if (!amount || !paymentMethodId || !domain || !registrant) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
+  // if (!amount || !paymentMethodId || !domain || !registrant) {
+  //   return res.status(400).json({ error: "Missing required fields" });
+  // }
 
   try {
-    const totalAmount = parseInt(amount);
+    // const totalAmount = parseInt(amount);
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount,
+      amount: price,
       currency: "gbp",
       payment_method: paymentMethodId,
       confirm: true,
@@ -130,21 +124,22 @@ app.post("/create-payment-intent", async (req, res) => {
     });
 
     if (paymentIntent.status === "succeeded") {
-      console.log("============> payment successful");
+      console.log("=================> Payment Intent Success: ", paymentIntent);
 
-      if (selectedEmailPackage) {
-        await registerEmailPackage(domain, selectedEmailPackage, registrant);
+      try {
+        const response = await registerDomain(domain, customer_id);
+
+        res.json(response);
+      } catch (error) {
+        console.error("Error registering domain:", error);
+        res.status(500).json({ error: "Failed to register domain." });
       }
-
-      // const response = await registerDomain(domain, registrant);
-
-      // res.json(response);
     } else {
       console.log("============> payment error");
       res.status(400).json({ error: "Payment failed." });
     }
   } catch (error) {
-    console.error("Payment error:", error);
+    console.log("Error creating payment intent:", error);
     res.status(500).json({ error: "Payment processing failed." });
   }
 });
@@ -152,24 +147,39 @@ app.post("/create-payment-intent", async (req, res) => {
 app.post("/registrant", async (req, res) => {
   const data = req.body;
 
-  console.log("=================> registrant data: ", data);
+  console.log("=================> customer data: ", data);
 
   try {
-    const customerId = await registerCustomer(data);
+    const response = await registerCustomer(data);
+    console.log("=================> Customer Registration Result: ", response);
+    // if (customerId) {
+    //   try {
+    // const registrantId = await createRegistration(data);
 
-    try {
-      const registrantResult = await createRegistration(data);
-
-      if (registrantResult.status) {
-        res.status(200).json({ status: true, customer: customerId });
-      }
-    } catch (error) {
-      console.error("Error registering registrant:", error);
-      res.status(500).json({ error: "Failed to register registrant." });
+    if (response.status) {
+      const customerId = response.data.id;
+      const username = response.data.username;
+      res.status(200).json({
+        status: true,
+        customer: customerId,
+        username,
+      });
+    } else {
+      res.status(200).json({
+        status: false,
+        error: response.validation_errors
+          ? response.validation_errors
+          : response.error_message,
+      });
     }
+
+    // } catch (error) {
+    //   console.error("Error registering registrant:", error);
+    // }
+    // }
   } catch (error) {
     console.error("Error registering customer:", error);
-    res.status(500).json({ error: "Failed to register customer." });
+    res.status(500).json({ error: "Failed to register registrant." });
   }
 });
 
@@ -256,14 +266,20 @@ async function registerCustomer(registrantData) {
     });
 
     const customerResult = await customerResponse.json();
+
     if (customerResult.status) {
       console.log(
         "============> Customer registered successfully ",
         customerResult
       );
-      return customerResult.data.id;
+      return customerResult;
     } else {
-      throw new Error(customerResult.error_message);
+      // throw new Error(customerResult.error_message);
+      console.log(
+        "============> Customer registration failed ",
+        customerResult
+      );
+      return customerResult;
     }
   } catch (error) {
     console.error("Error registering customer:", error);
@@ -294,63 +310,47 @@ async function createRegistration(registrantData) {
 
     console.log(
       "============> registrantResult API Response:",
-      registrantResult
+      registrantResult,
+      registrantResult.data.id
     ); // Log API response for debugging
 
-    return { status: registrantResult.status, data: registrantResult.data };
+    return registrantResult.data.id;
   } catch (error) {
     return { status: false, error_message: "Failed to register domain" };
   }
 }
 
-async function registerDomain(domain, registrantData) {
+async function registerDomain(domain, customerId) {
   console.log(
-    "========== Registering domain ",
+    "=================> registering domain & customerID: ",
     domain,
-    " : with registrant ",
-    registrantData
+    customerId
   );
+  // const customerId = await registerCustomer(registrantData);
+  // const registrantResult = await createRegistration(registrantData);
 
-  const customerId = await registerCustomer(registrantData);
-  const registrantResult = await createRegistration(registrantData);
+  const requestId = generateRequestID();
+  const signature = generateSignature(requestId, apiKey);
+  const registerUrl = constants.urls.domainRegister;
 
-  if (registrantResult.status) {
-    const requestId = generateRequestID();
-    const signature = generateSignature(requestId, apiKey);
+  const domainResponse = await fetch(registerUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      accept: "application/json",
+      "Api-Request-Id": requestId,
+      "Api-Signature": signature,
+    },
+    body: JSON.stringify({
+      domain_name: domain,
+      customer_id: customerId,
+      period: 12,
+    }),
+  });
+  const domainData = await domainResponse.json();
+  console.log("============> domainData API Response:", domainData); // Log API response for debugging
 
-    const registerUrl = constants.urls.domainRegister;
-    const domainResponse = await fetch(registerUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-        "Api-Request-Id": requestId,
-        "Api-Signature": signature,
-        "Reseller-ID": resellerId,
-      },
-      body: JSON.stringify({
-        domain_name: domain,
-        registrant_id: registrantResult.data.id,
-        period: 12,
-        customer_id: customerId,
-      }),
-    });
-
-    const domainData = await domainResponse.json();
-
-    console.log("============> domainData API Response:", domainData); // Log API response for debugging
-
-    if (!domainData.status) {
-      return { status: false, error_message: domainData.error_message };
-    } else {
-      return {
-        status: true,
-        domain: domain,
-      };
-    }
-  } else {
-    return { status: false, error_message: registrantResult.error_message };
-  }
+  return { domainData };
 }
 
 // Start the server

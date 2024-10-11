@@ -224,6 +224,18 @@
         background-color: #0056b3;
       }
 
+      .stripe-input {
+        margin: 10px 0;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        width: calc(100% - 22px); /* Adjusting for padding */
+      }
+
+      .inner-status {
+        display: flex;
+      }
+
       @keyframes spin {
         0% {
           transform: rotate(0deg);
@@ -233,6 +245,7 @@
         }
       }
     </style>
+    <script src="https://js.stripe.com/v3/"></script>
   </head>
   <body>
     <div class="widget">
@@ -262,9 +275,10 @@
       <h2>Search Results</h2>
     </div>
 
+    <!-- Registrant Form -->
     <div id="registrantForm" class="results-container hidden">
-      <h1>Login / Register</h1>
-      <h3>Login Below</h3>
+      <h1>Register</h1>
+      <!-- <h3>Login Below</h3>
       <div class="form-group">
         <label for="login-username">Username</label>
         <input type="text" id="login-username" required />
@@ -273,19 +287,19 @@
         <label for="login-password">Password</label>
         <input type="password" id="login-password" required />
       </div>
-      <button id="submitLoginButton" onclick="submitLoginForm()">Login</button>
+      <button id="submitLoginButton" onclick="submitLoginForm()">Login</button> -->
       <!-- </div>
 
     <div id="registrantForm" class="results-container hidden"> -->
       <h3>Register Below</h3>
-      <div class="form-group">
+      <!-- <div class="form-group">
         <label for="username">Username</label>
-        <input type="text" id="username" required />
+        <input type="text" id="username" />
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" required />
-      </div>
+        <input type="password" id="password" />
+      </div> -->
       <div class="form-group">
         <label for="firstName">First Name</label>
         <input type="text" id="firstName" required />
@@ -303,6 +317,10 @@
         <input type="text" id="city" required />
       </div>
       <div class="form-group">
+        <label for="country">Country</label>
+        <input type="text" id="country" value="GB" disabled required />
+      </div>
+      <div class="form-group">
         <label for="state">State</label>
         <input type="text" id="state" required />
       </div>
@@ -311,11 +329,7 @@
         <input type="text" id="postCode" required />
       </div>
       <div class="form-group">
-        <label for="country">Country (e.g., AU)</label>
-        <input type="text" id="country" required />
-      </div>
-      <div class="form-group">
-        <label for="countryCode">Country Code (e.g., 61)</label>
+        <label for="countryCode">Country Code</label>
         <input type="text" id="countryCode" required />
       </div>
       <div class="form-group">
@@ -327,10 +341,16 @@
         <input type="email" id="email" required />
       </div>
       <div class="form-group">
-        <label for="accountType">Account Type (e.g., business)</label>
-        <input type="text" id="accountType" required />
+        <label for="accountType">Account Type</label>
+        <input
+          type="text"
+          id="accountType"
+          value="personal"
+          disabled
+          required
+        />
       </div>
-      <div class="form-group">
+      <!-- <div class="form-group">
         <label for="businessName">Business Name</label>
         <input type="text" id="businessName" />
       </div>
@@ -341,7 +361,7 @@
       <div class="form-group">
         <label for="businessNumber">Business Number</label>
         <input type="text" id="businessNumber" />
-      </div>
+      </div> -->
       <button id="submitRegistrantButton" onclick="submitRegisterForm()">
         Create
       </button>
@@ -362,10 +382,86 @@
         Username: Smith9876<br />
         Name: Sample Smith
       </div>
-      <button class="confirmation-button">Purchase domain</button>
+      <div id="paymentForm" class="form-container hidden">
+        <h2>Payment Information</h2>
+        <div class="form-info" id="selectedDomainInfo"></div>
+        <div class="form-info" id="selectedEmailPackageInfo"></div>
+        <div class="thin-line"></div>
+        <!-- Grey line -->
+        <div class="total-payment" id="totalPaymentInfo"></div>
+        <div class="thin-line"></div>
+        <!-- Grey line -->
+
+        <form id="stripePaymentForm">
+          <div class="form-group">
+            <label for="cardHolderName">Card Holder Name</label>
+            <input
+              type="text"
+              id="cardHolderName"
+              class="stripe-input"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="card-element">Card Information</label>
+            <div id="card-element" class="stripe-input"></div>
+          </div>
+          <button type="submit">Pay & Register Domain</button>
+          <div id="card-errors" role="alert"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Success Notification -->
+    <div id="success-notification" class="confirmation-container">
+      <h1>All Done!</h1>
+      <p style="margin-top: 20px; margin-bottom: 20px">Thank you!</p>
+      <p>
+        Your Domain has been registered successfully, please check your email
+        account to access domain settins
+      </p>
     </div>
 
     <script>
+      const stripe = Stripe(
+        "pk_test_51IZk6CLWcouNeT9dn9WZIcKUsdj5Pgmg2w1GOuQxfHwrI0s4VEGIjnl0fUiSKoV3S95IVPxvxCD7wt27rfxSIy3200RPorXY4R"
+      );
+
+      const elements = stripe.elements();
+      const cardElement = elements.create("card");
+      cardElement.mount("#card-element");
+
+      let customerID = 0,
+        registrantID = 0;
+
+      function validateForm() {
+        const requiredFields = [
+          "firstName",
+          "lastName",
+          "address",
+          "city",
+          "state",
+          "postCode",
+          "country",
+          "countryCode",
+          "phone",
+          "email",
+        ];
+
+        let isValid = true;
+        requiredFields.forEach((fieldId) => {
+          const field = document.getElementById(fieldId);
+          if (!field.value.trim()) {
+            isValid = false;
+            field.classList.add("error"); // Optionally add a class to highlight the error
+          } else {
+            field.classList.remove("error");
+          }
+        });
+
+        return isValid;
+      }
+
       document.addEventListener("DOMContentLoaded", () => {
         document
           .getElementById("checkButton")
@@ -427,6 +523,10 @@
 
               // Display the domain results
               data.data.forEach((domainItem) => {
+                const vat = (domainItem.register_price * 20) / 100;
+                const priceWithTax = domainItem.register_price + vat;
+                const finalPrice = ((priceWithTax * 280) / 100).toFixed(2);
+
                 const domainRow = document.createElement("div");
                 domainRow.classList.add("domain-row");
                 domainRow.id = `domainRow-${domainItem.domain_name}`;
@@ -442,20 +542,22 @@
                 if (domainItem.is_available) {
                   statusDiv.innerHTML = `
                                   <div class="available">Available</div>
-                                  <div class="price">&pound;${domainItem.register_price} / Per Year</div>
+                                  <div class="price">&pound;${finalPrice} / Per Year</div>
                               `;
                   const buyButton = document.createElement("button");
                   buyButton.classList.add("buy-button");
                   buyButton.innerHTML = "Register";
                   buyButton.onclick = () => {
-                    showRegistrantForm(
-                      domainItem.domain_name,
-                      domainItem.register_price
-                    );
+                    showRegistrantForm(domainItem.domain_name, finalPrice);
                     displaySelectedDomain(domainItem.domain_name);
                   };
-                  domainRow.appendChild(statusDiv);
-                  domainRow.appendChild(buyButton);
+
+                  const innerStatusDiv = document.createElement("div");
+                  innerStatusDiv.classList.add("inner-status");
+                  innerStatusDiv.appendChild(statusDiv);
+                  innerStatusDiv.appendChild(buyButton);
+
+                  domainRow.appendChild(innerStatusDiv);
                 } else {
                   statusDiv.innerHTML = `<div class="taken">Taken</div>`;
                   domainRow.appendChild(statusDiv);
@@ -501,84 +603,78 @@
         };
 
         window.submitRegisterForm = async function () {
-          console.log("Submitting registrant form...");
+          if (!validateForm()) {
+            alert("Please fill in all required fields.");
+            return;
+          } else {
+            console.log("Submitting registrant form...");
 
-          const username = document.getElementById("username").value;
-          const password = document.getElementById("password").value;
+            // const username = document.getElementById("username").value;
+            // const password = document.getElementById("password").value;
 
-          const first_name = document.getElementById("firstName").value;
-          const last_name = document.getElementById("lastName").value;
-          const address = document.getElementById("address").value;
-          const city = document.getElementById("city").value;
-          const state = document.getElementById("state").value;
+            const first_name = document.getElementById("firstName").value;
+            const last_name = document.getElementById("lastName").value;
+            const address = document.getElementById("address").value;
+            const city = document.getElementById("city").value;
+            const state = document.getElementById("state").value;
 
-          const postcode = document.getElementById("postCode").value;
-          const country = document.getElementById("country").value;
-          const country_code = parseInt(
-            document.getElementById("countryCode").value
-          );
+            const post_code = document.getElementById("postCode").value;
+            const country = document.getElementById("country").value;
+            const country_code = parseInt(
+              document.getElementById("countryCode").value
+            );
 
-          const phone = document.getElementById("phone").value;
-          const email = document.getElementById("email").value;
+            const phone = document.getElementById("phone").value;
+            const email = document.getElementById("email").value;
 
-          const account_type = document.getElementById("accountType").value;
-          const business_name = document.getElementById("businessName").value;
-          const document_number_type =
-            document.getElementById("businessNumberType").value;
-          const business_number =
-            document.getElementById("businessNumber").value;
+            const account_type = document.getElementById("accountType").value;
+            // const business_name = document.getElementById("businessName").value;
+            // const business_number_type =
+            //   document.getElementById("businessNumberType").value;
+            // const business_number =
+            //   document.getElementById("businessNumber").value;
 
-          const data = {
-            username,
-            password,
-            first_name,
-            last_name,
-            address,
-            city,
-            state,
-            postcode,
-            country,
-            country_code,
-            phone,
-            email,
-            account_type,
-            business_name,
-            document_number_type,
-            business_number,
-          };
+            const data = {
+              first_name,
+              last_name,
+              address,
+              city,
+              state,
+              post_code,
+              country,
+              country_code,
+              phone,
+              email,
+              account_type,
+            };
 
-          await fetch("/registrant", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(data),
-          })
-            .then((response) => {
-              console.log("Response from registrant creation:", response);
-              if (!response.ok) {
-                return response.text().then((text) => {
-                  throw new Error(text);
-                });
-              }
-              return response.json();
+            await fetch("/registrant", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(data),
             })
-            .then((result) => {
-              console.log("Registrant creation result:", result);
-              if (result.error) {
-                alert("Error: " + result.error);
-              } else {
-                alert(
-                  "Customer registered successfully with ID: " + result.customer
-                );
-                // Proceed to show confirmation
-                showConfirmation(result);
-              }
-            })
-            .catch((error) => {
-              console.error("Error submitting registrant form:", error);
-              alert("Error submitting registrant form: " + error.message);
-            });
+              .then((response) => {
+                result = response.json();
+                if (!response.ok) {
+                  return;
+                }
+                return result;
+              })
+              .then((result) => {
+                console.log(result);
+                if (result.status) {
+                  customerID = result.customer;
+                  username = result.username;
+                  showConfirmation(customerID, username, first_name, last_name);
+                } else {
+                  for (const key in result.error) {
+                    alert("Failed to register customer: " + result.error[key]);
+                  }
+                }
+              });
+          }
         };
 
         function setProgressBarStep(step) {
@@ -601,14 +697,16 @@
           selectedDomainDiv.classList.remove("hidden");
         }
 
-        function showConfirmation(result) {
+        function showConfirmation(customerID, username, first_name, last_name) {
           setProgressBarStep("Confirm");
           const registrantForm = document.getElementById("registrantForm");
           const confirmationContainer = document.getElementById(
             "confirmationContainer"
           );
+          const stripePaymentContainer = document.getElementById("paymentForm");
           registrantForm.style.display = "none";
           confirmationContainer.style.display = "block";
+          stripePaymentContainer.style.display = "block";
           confirmationContainer.scrollIntoView({ behavior: "smooth" });
 
           // Set confirmation details
@@ -616,236 +714,87 @@
           <strong>Domain Confirmation</strong><br>
           Domain: www.${selectedDomainName}<br>
           Price: £${selectedDomainPrice} Per Year<br>
-          Auto Renew
-      `;
+          Auto Renew`;
           document.getElementById("accountCreated").innerHTML = `
           <strong>Account Created</strong><br>
-          Customer ID: ${result.customer}<br>
-          Username: ${document.getElementById("username").value}<br>
+          Customer ID: ${customerID}<br>
+          Username: ${username}<br>
           Name: ${document.getElementById("firstName").value} ${
             document.getElementById("lastName").value
-          }
-      `;
+          }`;
         }
-      });
-    </script>
 
-    <!-- <script>
-      const stripe = Stripe(
-        "pk_test_51IZk6CLWcouNeT9dn9WZIcKUsdj5Pgmg2w1GOuQxfHwrI0s4VEGIjnl0fUiSKoV3S95IVPxvxCD7wt27rfxSIy3200RPorXY4R"
-      );
-      const elements = stripe.elements();
-      const cardElement = elements.create("card");
-      cardElement.mount("#card-element");
+        document
+          .getElementById("stripePaymentForm")
+          .addEventListener("submit", async (event) => {
+            event.preventDefault();
 
-      let currentDomain = "";
-      let currentPrice = 0;
-      let selectedEmailPackage = "";
-      let selectedEmailPackagePrice = 0;
-
-      // Handle domain search
-      document
-        .getElementById("checkButton")
-        .addEventListener("click", async () => {
-          const domain = document.getElementById("domainInput").value;
-          const resultsContainer = document.getElementById("resultsContainer");
-
-          // Clear previous results
-          resultsContainer.innerHTML = "<h2>Search Results</h2>";
-
-          try {
-            const response = await fetch(
-              `/domain-availability?domain=${domain}`
-            );
-            const data = await response.json();
-
-            if (data.data.length === 0) {
-              resultsContainer.innerHTML +=
-                "<p>No domains available or invalid domain name.</p>";
-              return;
-            }
-
-            data.data.forEach((domain) => {
-              const domainRow = document.createElement("div");
-              domainRow.classList.add("domain-row");
-              domainRow.id = `domainRow-${domain.domain_name}`;
-
-              const domainNameDiv = document.createElement("div");
-              domainNameDiv.innerHTML = `www.${domain.domain_name}`;
-              domainRow.appendChild(domainNameDiv);
-
-              const statusDiv = document.createElement("div");
-              statusDiv.classList.add("status");
-
-              if (domain.is_available) {
-                statusDiv.innerHTML = `
-                            <div class="available">Available</div>
-                            <div class="price">£${domain.register_price} / Per Year</div>
-                        `;
-                const buyButton = document.createElement("button");
-                buyButton.classList.add("buy-button");
-                buyButton.innerHTML = "Register";
-                buyButton.onclick = () =>
-                  highlightRow(domain.domain_name, domain.register_price);
-                domainRow.appendChild(buyButton);
-              } else {
-                statusDiv.innerHTML = `<div class="taken">Taken</div>`;
-              }
-
-              domainRow.appendChild(statusDiv);
-              resultsContainer.appendChild(domainRow);
+            const { paymentMethod, error } = await stripe.createPaymentMethod({
+              type: "card",
+              card: cardElement,
+              billing_details: {
+                name: document.getElementById("cardHolderName").value,
+              },
             });
-          } catch (error) {
-            console.error("Error fetching domain availability:", error);
-          }
-        });
 
-      function highlightRow(domainName, price) {
-        document
-          .querySelectorAll(".domain-row")
-          .forEach((row) => row.classList.remove("selected"));
-        document
-          .getElementById(`domainRow-${domainName}`)
-          .classList.add("selected");
-        showHostingPackageForm(domainName, price);
-      }
+            if (error) {
+              console.error("Error creating payment method:", error);
+              document.getElementById("card-errors").innerText = error.message;
+              return;
+            } else {
+              const totalPrice = selectedDomainPrice * 100; // Convert to pence
 
-      async function showHostingPackageForm(domainName, price) {
-        console.log("============> showHostingPackageForm ", domainName);
-        console.log("============> showHostingPackageForm ", price);
-        currentDomain = domainName;
-        currentPrice = price;
-        document
-          .getElementById("emailHostingContainer")
-          .classList.remove("hidden");
-      }
-
-      function selectPackage(packageName, packagePrice) {
-        document
-          .querySelectorAll("input[type='checkbox']")
-          .forEach((checkbox) => (checkbox.checked = false));
-        event.target.checked = true;
-        selectedEmailPackage = packageName;
-        selectedEmailPackagePrice = packagePrice;
-      }
-
-      function showRegistrantForm() {
-        document
-          .getElementById("emailHostingContainer")
-          .classList.add("hidden");
-        document.getElementById("registrantForm").classList.remove("hidden");
-      }
-
-      function skipHostingPackage() {
-        selectedEmailPackage = "No package";
-        selectedEmailPackagePrice = 0;
-        showRegistrantForm();
-      }
-
-      function validate(data) {
-        let isValid = true;
-
-        if (!data.first_name) return !isValid;
-        if (!data.last_name) return !isValid;
-        if (!data.address) return !isValid;
-        if (!data.city) return !isValid;
-        if (!data.state) return !isValid;
-        if (!data.post_code) return !isValid;
-        if (!data.email) return !isValid;
-        if (!data.country) return !isValid;
-        if (!data.country_code) return !isValid;
-        if (!data.phone) return !isValid;
-
-        return isValid;
-      }
-
-      function submitRegisterForm() {
-        const registrantData = {
-          first_name: document.getElementById("firstName").value,
-          last_name: document.getElementById("lastName").value,
-          address: document.getElementById("address").value,
-          city: document.getElementById("city").value,
-          state: document.getElementById("state").value,
-          post_code: document.getElementById("postCode").value,
-          email: document.getElementById("email").value,
-          country: document.getElementById("country").value,
-          country_code: parseInt(document.getElementById("countryCode").value),
-          phone: document.getElementById("phone").value,
-          account_type: "business",
-          business_name: "John & Doe Corp",
-          business_number_type: "ABN",
-          business_number: "12345678",
-        };
-
-        if (validate(registrantData)) {
-          window.registrantData = registrantData;
-          document.getElementById(
-            "selectedDomainInfo"
-          ).innerText = `Domain: www.${currentDomain} - £${currentPrice}/per year`;
-          document.getElementById(
-            "selectedEmailPackageInfo"
-          ).innerText = `Email Hosting: ${selectedEmailPackage} - £${selectedEmailPackagePrice}/per year`;
-
-          const totalPayment = currentPrice + selectedEmailPackagePrice;
-          document.getElementById(
-            "totalPaymentInfo"
-          ).innerText = `Total Payment: £${totalPayment}/per year`;
-
-          document.getElementById("registrantForm").classList.add("hidden");
-          document.getElementById("paymentForm").classList.remove("hidden");
-        }
-      }
-
-      // Payment form submission with Stripe
-      document
-        .getElementById("stripePaymentForm")
-        .addEventListener("submit", async (event) => {
-          event.preventDefault();
-
-          const { paymentMethod, error } = await stripe.createPaymentMethod({
-            type: "card",
-            card: cardElement,
-            billing_details: {
-              name: document.getElementById("cardHolderName").value,
-            },
-          });
-
-          if (error) {
-            console.log("========= Ahhhhhhhh result.ejs error: " + error);
-            document.getElementById("card-errors").innerText = error.message;
-          } else {
-            console.log("======== stripe success: " + paymentMethod.id);
-            const totalPrice = (currentPrice + selectedEmailPackagePrice) * 100; // Convert to pence
-
-            const response = await fetch(
-              `/create-payment-intent?amount=${totalPrice}`,
-              {
+              const response = await fetch(`/create-payment-intent`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                   paymentMethodId: paymentMethod.id,
-                  domain: currentDomain,
-                  registrant: window.registrantData,
-                  emailPackagePrice: selectedEmailPackagePrice,
-                  selectedEmailPackage: selectedEmailPackage,
+                  domain: selectedDomainName,
+                  customer_id: customerID,
+                  price: totalPrice,
                 }),
-              }
-            );
+              });
 
-            const data = await response.json();
-            if (!data.status) {
-              // document.getElementById("card-errors").innerText = data.error;
-              alert(data.error_message);
-            } else {
+              const response_data = await response.json();
+              console.log("===============>response data:", response_data);
+
               console.log(
-                "Payment successful! Domain and email hosting registered."
+                "===============> domain register result ",
+                response_data.domainData.status
               );
-              alert("Domain successfully registered:", currentDomain);
+
+              if (response_data.domainData.status) {
+                showSuccessNotification();
+              } else {
+                alert("Domain registration failed!");
+              }
+              // } else {
+              //   alert(
+              //     "Domain registration failed!" +
+              //       response_data.domainData.error_message
+              //   );
+              // }
             }
-          }
-        });
-    </script> -->
+          });
+
+        function showSuccessNotification() {
+          const confirmationContainer = document.getElementById(
+            "confirmationContainer"
+          );
+          const stripePaymentContainer = document.getElementById("paymentForm");
+
+          confirmationContainer.style.display = "none";
+          stripePaymentContainer.style.display = "none";
+
+          const successNotification = document.getElementById(
+            "successNotification"
+          );
+          successNotification.style.display = "block";
+          successNotification.scrollIntoView({ behavior: "smooth" });
+        }
+      });
+    </script>
   </body>
 </html>
