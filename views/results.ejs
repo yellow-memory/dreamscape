@@ -236,6 +236,10 @@
         display: flex;
       }
 
+      .text-center {
+        text-align: center;
+      }
+
       @keyframes spin {
         0% {
           transform: rotate(0deg);
@@ -382,7 +386,7 @@
         Username: Smith9876<br />
         Name: Sample Smith
       </div>
-      <div id="paymentForm" class="form-container hidden">
+      <div id="paymentForm" class="form-container">
         <h2>Payment Information</h2>
         <div class="form-info" id="selectedDomainInfo"></div>
         <div class="form-info" id="selectedEmailPackageInfo"></div>
@@ -413,13 +417,11 @@
     </div>
 
     <!-- Success Notification -->
-    <div id="success-notification" class="confirmation-container">
-      <h1>All Done!</h1>
+    <div id="successNotification" class="confirmation-container text-center">
+      <h1>Confirmation</h1>
       <p style="margin-top: 20px; margin-bottom: 20px">Thank you!</p>
-      <p>
-        Your Domain has been registered successfully, please check your email
-        account to access domain settins
-      </p>
+      <p>Your Domain has been registered successfully!</p>
+      <p>Please check your email account to access domain settins.</p>
     </div>
 
     <script>
@@ -462,6 +464,16 @@
         return isValid;
       }
 
+      function showLoader() {
+        const loader = document.getElementById("loader");
+        loader.classList.remove("hidden");
+      }
+
+      function hideLoader() {
+        const loader = document.getElementById("loader");
+        loader.classList.add("hidden");
+      }
+
       document.addEventListener("DOMContentLoaded", () => {
         document
           .getElementById("checkButton")
@@ -470,7 +482,6 @@
             const domain = document.getElementById("domainInput").value.trim();
             const resultsContainer =
               document.getElementById("resultsContainer");
-            const loader = document.getElementById("loader");
 
             if (!domain) {
               resultsContainer.innerHTML =
@@ -484,7 +495,7 @@
             resultsContainer.innerHTML = "<h2>Search Results</h2>";
 
             // Show loader
-            loader.classList.remove("hidden");
+            showLoader();
 
             try {
               console.log("Sending request to check domain availability...");
@@ -503,7 +514,7 @@
               console.log("Response data:", data);
 
               // Hide loader
-              loader.classList.add("hidden");
+              hideLoader();
 
               if (data.error) {
                 resultsContainer.innerHTML += `<p>${data.error}</p>`;
@@ -580,13 +591,10 @@
           selectedDomainPrice = domainPrice;
           setProgressBarStep("Register");
           console.log("Showing registrant form for domain:", domainName);
-          const resultsContainer = document.getElementById("resultsContainer");
-          // const loginForm = document.getElementById("loginForm");
-          const registrantForm = document.getElementById("registrantForm");
-          resultsContainer.style.display = "none";
-          // loginForm.style.display = "block";
-          registrantForm.style.display = "block";
-          registrantForm.scrollIntoView({ behavior: "smooth" });
+
+          hideContainer("resultsContainer");
+
+          showContainer("registrantForm");
         };
 
         window.submitLoginForm = function () {
@@ -699,15 +707,9 @@
 
         function showConfirmation(customerID, username, first_name, last_name) {
           setProgressBarStep("Confirm");
-          const registrantForm = document.getElementById("registrantForm");
-          const confirmationContainer = document.getElementById(
-            "confirmationContainer"
-          );
-          const stripePaymentContainer = document.getElementById("paymentForm");
-          registrantForm.style.display = "none";
-          confirmationContainer.style.display = "block";
-          stripePaymentContainer.style.display = "block";
-          confirmationContainer.scrollIntoView({ behavior: "smooth" });
+          hideContainer("registrantForm");
+
+          showContainer("confirmationContainer");
 
           // Set confirmation details
           document.getElementById("domainConfirmation").innerHTML = `
@@ -728,6 +730,9 @@
           .getElementById("stripePaymentForm")
           .addEventListener("submit", async (event) => {
             event.preventDefault();
+
+            hideContainer("confirmationContainer");
+            showLoader();
 
             const { paymentMethod, error } = await stripe.createPaymentMethod({
               type: "card",
@@ -766,9 +771,13 @@
               );
 
               if (response_data.domainData.status) {
+                hideLoader();
                 showSuccessNotification();
               } else {
+                hideLoader();
                 alert("Domain registration failed!");
+
+                showContainer("confirmationContainer");
               }
               // } else {
               //   alert(
@@ -780,19 +789,20 @@
           });
 
         function showSuccessNotification() {
-          const confirmationContainer = document.getElementById(
-            "confirmationContainer"
-          );
-          const stripePaymentContainer = document.getElementById("paymentForm");
+          hideContainer("confirmationContainer");
 
-          confirmationContainer.style.display = "none";
-          stripePaymentContainer.style.display = "none";
+          showContainer("successNotification");
+        }
 
-          const successNotification = document.getElementById(
-            "successNotification"
-          );
-          successNotification.style.display = "block";
+        function showContainer(id) {
+          const container = document.getElementById(id);
+          container.style.display = "block";
           successNotification.scrollIntoView({ behavior: "smooth" });
+        }
+
+        function hideContainer(id) {
+          const container = document.getElementById(id);
+          container.style.display = "none";
         }
       });
     </script>
