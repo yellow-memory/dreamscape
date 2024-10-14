@@ -21,7 +21,7 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 app.get("/", (req, res) => {
-  res.render("results");
+  res.render("results", { stripePublicKey: process.env.STRIPE_PUBLIC_KEY });
 });
 
 // Serve static files from 'public'

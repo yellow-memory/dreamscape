@@ -425,9 +425,9 @@
     </div>
 
     <script>
-      const stripe = Stripe(
-        "pk_test_51IZk6CLWcouNeT9dn9WZIcKUsdj5Pgmg2w1GOuQxfHwrI0s4VEGIjnl0fUiSKoV3S95IVPxvxCD7wt27rfxSIy3200RPorXY4R"
-      );
+      const stripePublicKey = "<%= stripePublicKey %>";
+      const stripe = Stripe(stripePublicKey);
+      console.log("===============> stripe public key", stripePublicKey);
 
       const elements = stripe.elements();
       const cardElement = elements.create("card");
