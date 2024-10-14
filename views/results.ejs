@@ -743,7 +743,9 @@
             });
 
             if (error) {
+              hideLoader();
               console.error("Error creating payment method:", error);
+              alert("Error creating payment method:", error.message);
               document.getElementById("card-errors").innerText = error.message;
               return;
             } else {

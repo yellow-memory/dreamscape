@@ -117,6 +117,8 @@ app.post("/create-payment-intent", async (req, res) => {
       currency: "gbp",
       payment_method: paymentMethodId,
       confirm: true,
+      payment_method_types: ["card"],
+      metadata: { country: "GB" },
       automatic_payment_methods: {
         enabled: true,
         allow_redirects: "never",
