@@ -16,6 +16,25 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = 3000;
 
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "https://kudio.co.uk");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS, PUT, PATCH, DELETE"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "X-Requested-With,content-type"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", true);
+  res.setHeader("X-Frame-Options", "ALLOW-FROM https://kudio.co.uk");
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors 'self' https://kudio.co.uk"
+  );
+  next();
+});
+
 // Set up EJS as the view engine
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
